@@ -202,6 +202,44 @@
         /* Grid Layouts */
         .product-grid { display: grid; gap: 20px; grid-template-columns: repeat(2, 1fr); }
         @media (min-width: 768px) { .product-grid { grid-template-columns: repeat(6, 1fr); } }
+        /* =========================================
+           CARRUSEL DE MÁS VENDIDOS
+        ========================================= */
+        .carousel-wrapper {
+            position: relative;
+            width: 100%;
+            overflow: hidden; /* Oculta los productos que están fuera de pantalla */
+            padding: 10px 0;
+            margin-bottom: 20px;
+        }
+
+        .carousel-track {
+            display: flex;
+            transition: transform 0.5s ease-in-out; /* Animación de deslizamiento suave */
+            gap: 15px; /* Espacio entre tarjetas */
+            /* Evita que los hijos colapsen */
+            align-items: stretch; 
+        }
+
+        /* Mobile: 2 productos a la vez */
+        .carousel-item {
+            /* 100% de la pantalla menos 1 espacio (15px), dividido en 2 */
+            flex: 0 0 calc((100% - 15px) / 2); 
+            max-width: calc((100% - 15px) / 2);
+        }
+
+        .carousel-item .product-card {
+            height: 100%; /* Para que todas las tarjetas midan lo mismo */
+        }
+
+        /* Desktop: 5 productos a la vez */
+        @media (min-width: 768px) {
+            .carousel-item {
+                /* 100% de la pantalla menos 4 espacios (60px), dividido en 5 */
+                flex: 0 0 calc((100% - (15px * 4)) / 5); 
+                max-width: calc((100% - (15px * 4)) / 5);
+            }
+        }
 
         /* Product Card - Flexbox fix for button alignment */
         .product-card { 
@@ -298,7 +336,9 @@
 
     <main>
         <h2 class="section-title">Más Vendidos</h2>
-        <div class="product-grid" id="carousel-grid"></div>
+        <div class="carousel-wrapper">
+            <div class="carousel-track" id="carousel-track"></div>
+        </div>
 
         <h2 class="section-title">Catálogo Completo</h2>
         <div class="controls-bar">
@@ -385,12 +425,18 @@
             { id: 4, nombre: "Base Líquida", categoria: "Maquillaje Rostro", precio: 12000, imagen: "✨", popularidad: 90 },
             { id: 5, nombre: "Crema Hidratante", categoria: "Cremas", precio: 8500, imagen: "💧", popularidad: 85 },
             { id: 6, nombre: "Sérum Ácido Hialurónico", categoria: "Tratamientos", precio: 18000, imagen: "🧪", popularidad: 99 },
-            { id: 7, nombre: "Colonia Fresh", categoria: "Perfumes Masculinos", precio: 11000, imagen: "🍃", popularidad: 70 }
+            { id: 7, nombre: "Colonia Fresh", categoria: "Perfumes Masculinos", precio: 11000, imagen: "🍃", popularidad: 70 },
+            { id: 8, nombre: "Shampoo Ortiga", categoria: "Cuidado Capilar", precio: 7500, imagen: "🌿", popularidad: 75 },
+            { id: 9, nombre: "Protector Solar", categoria: "Cuidado Corporal", precio: 19000, imagen: "☀️", popularidad: 88 },
+            { id: 10, nombre: "Máscara Pestañas", categoria: "Maquillaje Ojos", precio: 10500, imagen: "👁️", popularidad: 82 }
         ];
 
         let products = [];
         let currentFiltered = [];
         let cart = JSON.parse(localStorage.getItem('perfumex_cart')) || [];
+
+        let carouselIndex = 0;
+        let carouselInterval;
 
         async function init() {
             if (GOOGLE_SHEET_CSV_URL) {
@@ -406,13 +452,69 @@
             }
             
             // Render Carrusel (Top 6 por popularidad)
-            const topSellers = [...products].sort((a,b) => b.popularidad - a.popularidad).slice(0, 6);
-            renderGrid(topSellers, 'carousel-grid');
+            const topSellers = [...products].sort((a,b) => b.popularidad - a.popularidad).slice(0, 10);
+            renderCarousel(topSellers);
+            startCarousel();
 
             // Render Catálogo General
             currentFiltered = [...products];
-            applySort(); // Ordena y renderiza el main-grid
+            applySort(); 
             updateCartUI();
+        }
+
+        function renderCarousel(data) {
+            const track = document.getElementById('carousel-track');
+            track.innerHTML = data.map(p => `
+                <div class="carousel-item">
+                    <div class="product-card">
+                        <div class="img-placeholder" style="font-size: 50px; margin-bottom: 15px;">${p.imagen || '🛍️'}</div>
+                        <h3>${p.nombre}</h3>
+                        <p class="cat">${p.categoria}</p>
+                        <p class="price">$${p.precio}</p>
+                        <button class="btn-add" onclick="addToCart(${p.id})">Añadir</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function startCarousel() {
+            if (carouselInterval) clearInterval(carouselInterval);
+            carouselInterval = setInterval(moveCarousel, 4000); // 4000ms = 4 segundos
+            
+            // Si el usuario gira el celular o redimensiona, recalculamos
+            window.addEventListener('resize', () => {
+                carouselIndex = 0;
+                updateCarouselTransform();
+            });
+        }
+
+        function moveCarousel() {
+            const track = document.getElementById('carousel-track');
+            const itemsCount = track.children.length;
+            if (itemsCount === 0) return;
+
+            const isDesktop = window.innerWidth >= 768;
+            const visibleItems = isDesktop ? 5 : 2;
+            const maxIndex = itemsCount - visibleItems;
+
+            carouselIndex++;
+            if (carouselIndex > maxIndex) {
+                carouselIndex = 0; // Vuelve al principio si llegó al final
+            }
+            updateCarouselTransform();
+        }
+
+        function updateCarouselTransform() {
+            const track = document.getElementById('carousel-track');
+            const item = track.querySelector('.carousel-item');
+            if(!item) return;
+            
+            // Lee el ancho real del elemento + el gap que definimos en CSS
+            const itemWidth = item.offsetWidth;
+            const gap = 15; 
+            const moveAmount = (itemWidth + gap) * carouselIndex;
+            
+            track.style.transform = `translateX(-${moveAmount}px)`;
         }
 
         // CSV Parser adaptado a las columnas en español
